@@ -1,0 +1,25 @@
+{
+  "patterns": [
+    {
+      "name": "CPF",
+      "regex": "\\b\\d{3}\\.\\d{3}\\.\\d{3}\\-\\d{2}\\b"
+    },
+    {
+      "name": "CNPJ",
+      "regex": "\\b\\d{2}\\.\\d{3}\\.\\d{3}\\/\\d{4}\\-\\d{2}\\b"
+    },
+    {
+      "name": "Email",
+      "regex": "[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+"
+    },
+    {
+      "name": "Telefone",
+      "regex": "\\(\\d{2}\\)\\s?\\d{4,5}\\-\\d{4}"
+    },
+    {
+      "name": "Placa",
+      "regex": "[A-Z]{3}\\-\\d{4}",
+      "flags": ["ignorecase"]
+    }
+  ]
+}
