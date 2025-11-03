@@ -54,4 +54,4 @@ def test_scan_command_errors_when_config_missing(tmp_path: Path) -> None:
     )
 
     assert result.exit_code != 0
-    assert "Arquivo de configuração não encontrado" in result.stdout
+    assert "Arquivo de configuração não encontrado" in result.stderr
