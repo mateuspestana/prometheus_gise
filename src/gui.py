@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List
 
 from PyQt5.QtCore import Qt, QUrl
-from PyQt5.QtGui import QDesktopServices, QFont, QPalette, QColor
+from PyQt5.QtGui import QDesktopServices, QFont, QPalette, QColor, QIcon
 from PyQt5.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -33,6 +33,7 @@ from PyQt5.QtWidgets import (
 )
 
 DEFAULT_PATTERNS_PATH = Path("config/patterns.json")
+APP_ICON_PATH = Path("icon.png")
 
 
 @dataclass
@@ -54,6 +55,7 @@ class PrometheusWindow(QMainWindow):
         self.setWindowTitle("Prometheus Forensic Tool")
         self.resize(1100, 680)
         self._apply_palette()
+        self._apply_icon()
 
         self.input_edit = QLineEdit(self)
         self.config_edit = QLineEdit(self)
@@ -95,6 +97,13 @@ class PrometheusWindow(QMainWindow):
             "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 0 6px; }"
             "QTableWidget { gridline-color: #3d4354; selection-background-color: #6eaef0; selection-color: #10141d; }"
         )
+
+    def _apply_icon(self) -> None:
+        """Load and apply the application icon when available."""
+
+        if APP_ICON_PATH.exists():
+            icon = QIcon(str(APP_ICON_PATH.resolve()))
+            self.setWindowIcon(icon)
 
     def _build_ui(self) -> None:
         central = QWidget(self)
@@ -400,6 +409,11 @@ def run_gui() -> None:
     """Launch the PyQt5 application."""
 
     app = QApplication.instance() or QApplication(sys.argv)
+
+    if APP_ICON_PATH.exists():
+        icon = QIcon(str(APP_ICON_PATH.resolve()))
+        app.setWindowIcon(icon)
+
     window = PrometheusWindow()
     window.show()
     sys.exit(app.exec_())
