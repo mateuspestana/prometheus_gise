@@ -1,26 +1,14 @@
 """Command Line Interface for the Prometheus Forensic Tool (F7)."""
 
-from __future__ import annotations
-
-import logging
 from pathlib import Path
 from typing import Optional
 
 import typer
 
+from .logger import configure_logging, get_logger
 from .main import run_pipeline
 
-app = typer.Typer(help="Prometheus Forensic Tool CLI")
-
-
-def configure_logging(verbose: bool) -> None:
-    """Configure logging based on the verbosity flag."""
-
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="[%(asctime)s] %(levelname)s - %(message)s",
-    )
+app = typer.Typer(help="Prometheus Forensic Tool CLI", pretty_exceptions_enable=False)
 
 
 @app.callback()
@@ -35,8 +23,8 @@ def main(
 ) -> None:
     """Callback global usado para inicializar configurações compartilhadas."""
 
-    configure_logging(verbose)
-    ctx.obj = {"verbose": verbose}
+    logger = configure_logging(verbose=verbose)
+    ctx.obj = {"verbose": verbose, "logger": logger}
 
 
 @app.command(help="Executa a varredura forense completa.")
@@ -49,37 +37,35 @@ def scan(
         Path("config/patterns.json"),
         "--config",
         "-c",
-        file_okay=True,
-        dir_okay=False,
-        resolve_path=True,
         help="Arquivo JSON com os padrões de regex.",
     ),
     output: Path = typer.Option(
         Path("outputs/prometheus_results.json"),
         "--output",
         "-o",
-        file_okay=True,
-        dir_okay=False,
-        resolve_path=True,
         help="Arquivo de saída JSON consolidado.",
     ),
 ) -> None:
     """Orquestra a execução completa da ferramenta."""
 
+    config_path = config if config else None
+    output_path = output
     verbose: bool = ctx.obj.get("verbose", False) if ctx.obj else False
-    logging.getLogger(__name__).debug(
-        "CLI scan requested with input=%s config=%s output=%s verbose=%s", input, config, output, verbose
+    logger = get_logger()
+    logger.debug(
+        "CLI scan requested with input=%s config=%s output=%s verbose=%s", input, config_path, output_path, verbose
     )
 
-    if config and not config.exists():
-        raise typer.BadParameter(f"Arquivo de configuração não encontrado: {config}")
+    if config_path and not config_path.exists():
+        raise typer.BadParameter(f"Arquivo de configuração não encontrado: {config_path}")
 
-    output.parent.mkdir(parents=True, exist_ok=True)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        run_pipeline(input_dir=input, config_path=config if config else Path(), output_path=output)
+        run_pipeline(input_dir=input, config_path=config_path if config_path else Path(), output_path=output_path)
     except NotImplementedError as exc:  # pragma: no cover - placeholder behaviour
         typer.secho(str(exc), fg=typer.colors.YELLOW)
+        logger.warning("Pipeline ainda não implementado: %s", exc)
         raise typer.Exit(code=1) from exc
 
 
