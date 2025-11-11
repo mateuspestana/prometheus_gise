@@ -36,7 +36,6 @@ def build_evidence_match(payload: EvidencePayload, regex_match: RegexMatch) -> E
 def _compose_context(payload: EvidencePayload, regex_match: RegexMatch) -> Optional[str]:
     pieces: list[str] = []
 
-    # Add structural hints for database rows
     if payload.payload_type == "database_row":
         table = payload.metadata.get("table")
         row_index = payload.metadata.get("row_index")
@@ -45,11 +44,9 @@ def _compose_context(payload: EvidencePayload, regex_match: RegexMatch) -> Optio
         if row_index is not None:
             pieces.append(f"linha {row_index}")
 
-    # Append regex location metadata when available
     if regex_match.location:
         pieces.append(regex_match.location)
 
-    # Finally include textual context window
     if regex_match.context:
         pieces.append(regex_match.context.strip())
 

@@ -1,4 +1,4 @@
-"""High-level navigator orchestrating UFDR content ingestion (F3/F3.1)."""
+"""High-level navigator orchestrating UFDR content ingestion (F3/F6)."""
 
 from __future__ import annotations
 

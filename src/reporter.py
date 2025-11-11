@@ -1,4 +1,4 @@
-"""Reporter responsible for consolidating Prometheus results into JSON (F5)."""
+"""Reporter responsible for consolidating Prometheus results into JSON (F5/F10)."""
 
 import json
 import logging
@@ -23,6 +23,10 @@ class ResultReporter:
     def output_path(self) -> Path:
         return self._output_path
 
+    @property
+    def match_count(self) -> int:
+        return len(self._matches)
+
     def add_match(self, match: EvidenceMatch) -> None:
         self._matches.append(match)
 
@@ -33,10 +37,7 @@ class ResultReporter:
         self._matches.clear()
 
     def write(self) -> Path:
-        """Write all collected matches to disk in JSON format.
-
-        The write is performed atomically to avoid partially written files.
-        """
+        """Write all collected matches to disk in JSON format."""
 
         self._output_path.parent.mkdir(parents=True, exist_ok=True)
         data = [match.to_dict() for match in self._matches]
