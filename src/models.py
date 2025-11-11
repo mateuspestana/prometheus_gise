@@ -1,4 +1,4 @@
-"""Data models for consolidated Prometheus results."""
+"""Core data models for Prometheus forensic results (F5/F6)."""
 
 from dataclasses import asdict, dataclass
 from typing import Dict, Optional
@@ -6,7 +6,7 @@ from typing import Dict, Optional
 
 @dataclass(frozen=True)
 class EvidenceMatch:
-    """Representation of a single consolidated evidence match."""
+    """Normalized representation of a consolidated match."""
 
     source_file: str
     internal_path: str
@@ -18,5 +18,4 @@ class EvidenceMatch:
 
     def to_dict(self) -> Dict[str, str]:
         payload = asdict(self)
-        # remove keys with None values to keep output compact
         return {key: value for key, value in payload.items() if value is not None}
