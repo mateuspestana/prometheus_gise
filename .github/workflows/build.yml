@@ -4,11 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -51,10 +46,10 @@ jobs:
             PIP_EXE=".venv/bin/pip"
           fi
           
-          # Install pdfminer.six separately (uv may have issues with the dot in package name)
+          # pdfminer.six precisa ser separado
           $PIP_EXE install "pdfminer.six>=20221105,<2025.0" || true
           
-          # Install other dependencies using uv, fallback to pip
+          # instalações (uv → pip fallback)
           if command -v uv &> /dev/null; then
             uv pip install --python $PYTHON_EXE -r requirements.txt || $PIP_EXE install -r requirements.txt
             uv pip install --python $PYTHON_EXE pyinstaller || $PIP_EXE install pyinstaller
@@ -68,12 +63,11 @@ jobs:
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
             PYTHON_EXE=".venv/Scripts/python.exe"
-            export QT_QPA_PLATFORM=offscreen
           else
             PYTHON_EXE=".venv/bin/python"
-            export QT_QPA_PLATFORM=offscreen
           fi
           
+          export QT_QPA_PLATFORM=offscreen
           $PYTHON_EXE -m pytest tests/ -v --tb=short || true
         continue-on-error: true
       
@@ -86,22 +80,15 @@ jobs:
             PYINSTALLER_EXE=".venv/bin/pyinstaller"
           fi
           
-          # Clean any previous builds completely to avoid symlink conflicts
           rm -rf build dist *.spec.bak || true
-          
           $PYINSTALLER_EXE Prometheus.spec --clean --noconfirm
       
       - name: Get version
         id: get_version
         shell: bash
         run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
-          else
-            VERSION="dev-$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA:0:7}"
-          fi
+          VERSION="${GITHUB_REF#refs/tags/}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
       
       - name: Prepare artifacts (Linux)
         if: runner.os == 'Linux'
@@ -110,74 +97,52 @@ jobs:
           cd dist/Prometheus
           tar -czf ../../Prometheus-Linux-${VERSION}.tar.gz .
           cd ../..
-          echo "artifact_name=Prometheus-Linux-${VERSION}.tar.gz" >> $GITHUB_ENV
+          echo "artifact_file=Prometheus-Linux-${VERSION}.tar.gz" >> $GITHUB_ENV
       
       - name: Prepare artifacts (Windows)
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
-          VERSION="${{ steps.get_version.outputs.version }}"
-          cd dist/Prometheus
-          # Use PowerShell for compression on Windows
-          powershell -Command "Compress-Archive -Path * -DestinationPath ../../Prometheus-Windows-${VERSION}.zip -Force"
-          cd ../..
-          echo "artifact_name=Prometheus-Windows-${VERSION}.zip" >> $GITHUB_ENV
+          $version = "${{ steps.get_version.outputs.version }}"
+          Compress-Archive -Path dist/Prometheus/* -DestinationPath "Prometheus-Windows-$version.zip" -Force
+          echo "artifact_file=Prometheus-Windows-$version.zip" >> $env:GITHUB_ENV
       
-      - name: Upload Linux artifact
-        if: runner.os == 'Linux'
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Prometheus-Linux-${{ steps.get_version.outputs.version }}
-          path: |
-            dist/Prometheus/Prometheus
-            Prometheus-Linux-*.tar.gz
+          name: Prometheus-${{ runner.os }}-${{ steps.get_version.outputs.version }}
+          path: ${{ env.artifact_file }}
           retention-days: 30
-      
-      - name: Upload Windows artifact
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Prometheus-Windows-${{ steps.get_version.outputs.version }}
-          path: |
-            dist\Prometheus\Prometheus.exe
-            Prometheus-Windows-*.zip
-          retention-days: 30
+
 
   release:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Download all artifacts
+      - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
       
-      - name: Create Release
+      - name: Create GitHub Release and upload binaries
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          name: "Prometheus Forensic Tool ${{ github.ref_name }}"
           body: |
-            ## Prometheus Forensic Tool ${{ github.ref_name }}
-            
-            Executáveis para macOS, Linux e Windows.
-            
-            ### Downloads
-            - **macOS**: Prometheus-macOS-*.zip
-            - **Linux**: Prometheus-Linux-*.tar.gz
-            - **Windows**: Prometheus-Windows-*.zip
-            
-            ### Instruções
-            - Linux: Extraia o tarball e execute `./Prometheus`
-            - Windows: Extraia o ZIP e execute `Prometheus.exe`
-          files: |
-            artifacts/**/*
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+            ## Prometheus Forensic Tool – versão ${{ github.ref_name }}
+
+            Release automático gerado via GitHub Actions.
+
+            ### Executáveis incluídos:
+            - **Linux:** arquivo `.tar.gz`
+            - **Windows:** arquivo `.zip`
+
+            Extraia o arquivo correspondente ao seu sistema e execute normalmente.
+          
+          files: artifacts/**/*
+
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
