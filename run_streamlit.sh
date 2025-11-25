@@ -58,7 +58,7 @@ echo ""
 # Create virtual environment if it doesn't exist
 if [ ! -d ".venv" ]; then
     echo "📦 Criando ambiente virtual (.venv)..."
-    $PYTHON_CMD -m venv .venv
+    $PYTHON_CMD -m venv .venv --python 3.12
     echo "✅ Ambiente virtual criado!"
 else
     echo "✅ Ambiente virtual (.venv) já existe"

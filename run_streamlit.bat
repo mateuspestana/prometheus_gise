@@ -59,7 +59,7 @@ echo.
 REM Create virtual environment if it doesn't exist
 if not exist ".venv" (
     echo 📦 Criando ambiente virtual (.venv)...
-    python -m venv .venv
+    python -m venv .venv --python 3.12
     if errorlevel 1 (
         echo ❌ Erro: Falha ao criar ambiente virtual.
         pause
