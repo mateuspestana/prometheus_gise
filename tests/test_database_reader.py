@@ -124,24 +124,22 @@ def test_content_navigator_fallback_to_text(monkeypatch: pytest.MonkeyPatch, tmp
     assert payload.file_type == "text"
 
 
-def test_text_extractor_prefers_unstructured(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_text_extractor_extracts_plain_text(monkeypatch: pytest.MonkeyPatch) -> None:
     extractor = TextExtractor()
 
-    monkeypatch.setattr(TextExtractor, "_try_unstructured", lambda self, path: "texto primário")
-    monkeypatch.setattr(TextExtractor, "_try_pdfminer", lambda self, path: "")
+    monkeypatch.setattr(TextExtractor, "_extract_plain_text", lambda self, path: ("texto primário", "plain-text"))
 
     stream = io.BytesIO(b"dados qualquer")
     result = extractor.extract(stream, source_name="documento.txt")
 
-    assert result.engine == "unstructured"
+    assert result.engine == "plain-text"
     assert result.text == "texto primário"
 
 
 def test_text_extractor_pdfminer_used_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
     extractor = TextExtractor()
 
-    monkeypatch.setattr(TextExtractor, "_try_pdfminer", lambda self, path: "texto pdfminer")
-    monkeypatch.setattr(TextExtractor, "_try_unstructured", lambda self, path: (_ for _ in ()).throw(AssertionError("não deve chamar unstructured")))
+    monkeypatch.setattr(TextExtractor, "_extract_pdf", lambda self, path: ("texto pdfminer", "pdfminer"))
 
     stream = io.BytesIO(b"dados qualquer")
     result = extractor.extract(stream, source_name="documento.pdf")
@@ -150,13 +148,13 @@ def test_text_extractor_pdfminer_used_when_available(monkeypatch: pytest.MonkeyP
     assert result.text == "texto pdfminer"
 
 
-def test_text_extractor_returns_empty_when_unstructured_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_text_extractor_returns_empty_when_pdf_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     extractor = TextExtractor()
-    monkeypatch.setattr(TextExtractor, "_try_pdfminer", lambda self, path: "")
-    monkeypatch.setattr(TextExtractor, "_try_unstructured", lambda self, path: "")
+    monkeypatch.setattr(TextExtractor, "_extract_pdf", lambda self, path: ("", "pdfminer"))
 
     stream = io.BytesIO(b"dados qualquer")
     result = extractor.extract(stream, source_name="documento.pdf")
 
-    assert result.engine == "unstructured"
+    assert result.engine == "pdfminer"
+    assert result.text == ""
     assert result.text == ""

@@ -1,16 +1,21 @@
-"""Modern PyQt5 interface for the Prometheus Forensic Tool (F8 refresh)."""
+"""Modern PyQt6 interface for the Prometheus Forensic Tool (F8 refresh)."""
 
 from __future__ import annotations
 
 import json
+import signal
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt5.QtCore import Qt, QUrl
-from PyQt5.QtGui import QDesktopServices, QFont, QPalette, QColor, QIcon
-from PyQt5.QtWidgets import (
+# Configure Qt plugins BEFORE importing any PyQt6 modules
+from .qt_utils import configure_qt_plugins
+configure_qt_plugins()
+
+from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtGui import QDesktopServices, QFont, QPalette, QColor, QIcon, QAction
+from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
     QFormLayout,
@@ -77,6 +82,12 @@ class PrometheusWindow(QMainWindow):
         self._configure_table()
         self._configure_help()
         self._load_default_paths()
+    
+    def closeEvent(self, event) -> None:
+        """Handle window close event."""
+        # Clean up any resources if needed
+        self.logger.debug("Window closing, cleaning up...")
+        event.accept()
 
     # ------------------------------------------------------------------ UI ---
     def _apply_palette(self) -> None:
@@ -87,15 +98,15 @@ class PrometheusWindow(QMainWindow):
         surface = QColor(40, 44, 55)
         text = QColor(236, 239, 244)
 
-        palette.setColor(QPalette.Window, background)
-        palette.setColor(QPalette.Base, surface)
-        palette.setColor(QPalette.AlternateBase, QColor(46, 50, 63))
-        palette.setColor(QPalette.Text, text)
-        palette.setColor(QPalette.WindowText, text)
-        palette.setColor(QPalette.Button, surface)
-        palette.setColor(QPalette.ButtonText, text)
-        palette.setColor(QPalette.Highlight, QColor(110, 174, 236))
-        palette.setColor(QPalette.HighlightedText, QColor(16, 20, 29))
+        palette.setColor(QPalette.ColorRole.Window, background)
+        palette.setColor(QPalette.ColorRole.Base, surface)
+        palette.setColor(QPalette.ColorRole.AlternateBase, QColor(46, 50, 63))
+        palette.setColor(QPalette.ColorRole.Text, text)
+        palette.setColor(QPalette.ColorRole.WindowText, text)
+        palette.setColor(QPalette.ColorRole.Button, surface)
+        palette.setColor(QPalette.ColorRole.ButtonText, text)
+        palette.setColor(QPalette.ColorRole.Highlight, QColor(110, 174, 236))
+        palette.setColor(QPalette.ColorRole.HighlightedText, QColor(16, 20, 29))
 
         self.setPalette(palette)
         self.setStyleSheet(
@@ -131,7 +142,7 @@ class PrometheusWindow(QMainWindow):
         header_layout.setContentsMargins(0, 0, 0, 0)
 
         title = QLabel("Prometheus Forensic Tool", header)
-        title_font = QFont("Segoe UI", 22, QFont.Bold)
+        title_font = QFont("Segoe UI", 22, QFont.Weight.Bold)
         title.setFont(title_font)
 
         subtitle = QLabel("Análise moderna de pacotes UFDR", header)
@@ -145,14 +156,14 @@ class PrometheusWindow(QMainWindow):
 
         header_layout.addLayout(title_block, stretch=1)
 
-        self.status_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.status_label.setStyleSheet("color: #9aa3ba;")
         header_layout.addWidget(self.status_label, stretch=0)
 
         return header
 
     def _build_splitter(self) -> QSplitter:
-        splitter = QSplitter(Qt.Horizontal, self)
+        splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.addWidget(self._build_inputs_panel())
         splitter.addWidget(self._build_right_panel())
         splitter.setStretchFactor(0, 0)
@@ -161,7 +172,7 @@ class PrometheusWindow(QMainWindow):
 
     def _build_inputs_panel(self) -> QWidget:
         panel = QFrame(self)
-        panel.setFrameShape(QFrame.NoFrame)
+        panel.setFrameShape(QFrame.Shape.NoFrame)
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -210,7 +221,7 @@ class PrometheusWindow(QMainWindow):
 
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
-        self.progress_bar.setAlignment(Qt.AlignCenter)
+        self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.progress_bar.setFormat("Aguardando execução…")
         layout.addWidget(self.progress_bar)
 
@@ -251,7 +262,7 @@ class PrometheusWindow(QMainWindow):
         export_button = QPushButton("Exportar resultados", tab)
         export_button.clicked.connect(self._export_results)
         export_button.setStyleSheet("QPushButton { background-color: #3fbdb0; color: #102533; }")
-        layout.addWidget(export_button, alignment=Qt.AlignRight)
+        layout.addWidget(export_button, alignment=Qt.AlignmentFlag.AlignRight)
 
         return tab
 
@@ -276,13 +287,13 @@ class PrometheusWindow(QMainWindow):
         self.results_table.setColumnCount(len(headers))
         self.results_table.setHorizontalHeaderLabels(headers)
         self.results_table.verticalHeader().setVisible(False)
-        self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.results_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.results_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.results_table.setAlternatingRowColors(True)
         self.results_table.setSortingEnabled(True)
         header = self.results_table.horizontalHeader()
         for index in range(len(headers)):
-            header.setSectionResizeMode(index, QHeaderView.Stretch)
+            header.setSectionResizeMode(index, QHeaderView.ResizeMode.Stretch)
 
     def _configure_help(self) -> None:
         self.help_view.setOpenExternalLinks(True)
@@ -320,7 +331,7 @@ class PrometheusWindow(QMainWindow):
             <li><code>extractor.py</code>: trata <code>.ufdr</code> como arquivos <i>zip</i> (F2).</li>
             <li><code>regex_engine.py</code>: executa os padrões configurados (F4).</li>
             <li><code>cli.py</code>: interface de linha de comando (F7).</li>
-            <li><code>gui.py</code>: esta interface moderna em PyQt5 (F8).</li>
+            <li><code>gui.py</code>: esta interface moderna em PyQt6 (F8).</li>
         </ul>
 
         <h3 style='color:#eff3ff;'>Status do Projeto</h3>
@@ -377,7 +388,7 @@ class PrometheusWindow(QMainWindow):
         self.progress_bar.setRange(0, 0)
         self.progress_bar.setFormat("Preparando execução…")
         self.status_label.setText("Executando varredura…")
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         self.logger.info("Varredura iniciada via GUI: input=%s config=%s output=%s", evidence_dir, effective_config, self.output_path)
 
         success = False
@@ -536,10 +547,58 @@ class PrometheusWindow(QMainWindow):
     # --------------------------------------------------------------- Entry ---
 
 
-def run_gui() -> None:
-    """Launch the PyQt5 application."""
+def _cleanup_application() -> None:
+    """Clean up Qt application resources."""
+    app = QApplication.instance()
+    if app is not None:
+        try:
+            # Close all windows
+            for widget in app.allWidgets():
+                if isinstance(widget, QMainWindow):
+                    widget.close()
+            # Process any pending events
+            app.processEvents()
+            # Quit the application
+            app.quit()
+        except Exception:
+            pass
 
-    app = QApplication.instance() or QApplication(sys.argv)
+
+def _signal_handler(signum, frame) -> None:
+    """Handle termination signals gracefully."""
+    logger = configure_logging(verbose=False, log_path=DEFAULT_LOG_PATH)
+    logger.info("Received signal %d, cleaning up...", signum)
+    _cleanup_application()
+    sys.exit(0)
+
+
+def run_gui() -> None:
+    """Launch the PyQt6 application."""
+    # Qt plugins are already configured at module import time via configure_qt_plugins()
+    # But we need to ensure QApplication is created with the correct plugin paths
+    logger = configure_logging(verbose=False, log_path=DEFAULT_LOG_PATH)
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
+    
+    # Re-configure plugins to ensure environment variables are set
+    plugin_path = configure_qt_plugins()
+    if plugin_path:
+        logger.debug("Qt plugins configured from: %s", plugin_path)
+    
+    # Create QApplication - this must happen AFTER plugin paths are configured
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(sys.argv)
+        # Set quit on last window closed
+        app.setQuitOnLastWindowClosed(True)
+    
+    # Set library paths programmatically after QApplication is created
+    from PyQt6.QtCore import QCoreApplication
+    if plugin_path:
+        plugin_path_str = str(plugin_path.resolve())
+        QCoreApplication.setLibraryPaths([plugin_path_str])
 
     if APP_ICON_PATH.exists():
         icon = QIcon(str(APP_ICON_PATH.resolve()))
@@ -547,7 +606,17 @@ def run_gui() -> None:
 
     window = PrometheusWindow()
     window.show()
-    sys.exit(app.exec_())
+    
+    try:
+        sys.exit(app.exec())
+    except KeyboardInterrupt:
+        logger.info("Keyboard interrupt received, cleaning up...")
+        _cleanup_application()
+        sys.exit(0)
+    except Exception as exc:
+        logger.exception("Error running GUI application")
+        _cleanup_application()
+        raise
 
 
 if __name__ == "__main__":

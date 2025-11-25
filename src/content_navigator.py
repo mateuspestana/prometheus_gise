@@ -205,13 +205,15 @@ class UFDRContentNavigator:
 
     def _collect_text_payload(self, member: UFDRMember) -> tuple[EvidencePayload, str] | None:
         try:
+            logger.debug("Extraindo texto de %s", member.name)
             with self._extractor.open_member(member.name) as stream:
                 result = self._text_extractor.extract(stream, source_name=member.name)
+            logger.debug("Extração concluída para %s (engine: %s, tamanho: %d)", member.name, result.engine, len(result.text))
         except MissingDependencyError as exc:
             logger.warning("Dependência ausente ao processar %s: %s", member.name, exc)
             return None
         except Exception as exc:  # pragma: no cover - defensivo
-            logger.error("Falha ao extrair texto de %s: %s", member.name, exc)
+            logger.error("Falha ao extrair texto de %s: %s", member.name, exc, exc_info=True)
             return None
 
         if not result.text.strip():

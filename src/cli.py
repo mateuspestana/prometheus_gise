@@ -78,7 +78,7 @@ def scan(
         if event_type == "ufdr-start":
             total = int(event.get("textual_total") or 0)
             if total > 0:
-                bar_cm = typer.progressbar(length=total, label=f"{ufdr_name} (unstructured)")
+                bar_cm = typer.progressbar(length=total, label=f"{ufdr_name} (textual)")
                 progress = bar_cm.__enter__()
                 progress_state[path_str] = (bar_cm, progress)
                 typer.secho(
@@ -88,7 +88,7 @@ def scan(
                 )
             else:
                 typer.secho(
-                    f"{ufdr_name}: nenhum arquivo textual elegível para unstructured.",
+                    f"{ufdr_name}: nenhum arquivo textual elegível para processamento.",
                     fg=typer.colors.YELLOW,
                     err=True,
                 )

@@ -1,12 +1,12 @@
-"""Smoke tests for the PyQt5 GUI scaffold (F8)."""
+"""Smoke tests for the PyQt6 GUI scaffold (F8)."""
 
 import sys
 
 import pytest
 
-pytest.importorskip("PyQt5")
+pytest.importorskip("PyQt6")
 
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication
 
 from src.gui import PrometheusWindow, ResultRow
 

@@ -45,7 +45,7 @@ def test_build_match_for_text_payload_without_timestamp() -> None:
         payload_type="text",
         file_type="document",
         content="lorem ipsum",
-        metadata={"engine": "unstructured"},
+        metadata={"engine": "plain-text"},
         modified=None,
     )
     regex_match = _make_regex_match("CPF 123", context="CPF encontrado")
