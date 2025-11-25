@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, Literal, Mapping
+from typing import Callable, Iterator, Literal, Mapping, Sequence
 
 from .database_reader import UFDRDatabaseReader
 from .extractor import UFDRExtractor, UFDRMember
@@ -69,6 +69,26 @@ class EvidencePayload:
     modified: datetime | None
 
 
+@dataclass(frozen=True)
+class TextualProgressEvent:
+    """Progress information for textual extraction inside an UFDR."""
+
+    member: UFDRMember
+    index: int
+    total: int
+    stage: Literal["start", "done", "skip"]
+    engine: str | None = None
+
+
+@dataclass(frozen=True)
+class NavigatorPlan:
+    """Partition of UFDR members for processing."""
+
+    members: Sequence[UFDRMember]
+    database_members: Sequence[UFDRMember]
+    textual_members: Sequence[UFDRMember]
+
+
 class UFDRContentNavigator:
     """Coordinate ingestion of UFDR content, prioritizing databases."""
 
@@ -77,11 +97,32 @@ class UFDRContentNavigator:
         self._database_reader = UFDRDatabaseReader(self._extractor)
         self._text_extractor = TextExtractor()
 
-    def collect_payloads(self) -> Iterator[EvidencePayload]:
-        """Yield structured payloads from an UFDR archive."""
+    def plan_processing(self) -> NavigatorPlan:
+        """Return the members partitioned by type for progress planning."""
 
         members = list(self._extractor.iter_members())
         database_members = [member for member in members if self._is_database(member)]
+        textual_members = [
+            member
+            for member in members
+            if not member.is_dir and self._is_textual(member)
+        ]
+        return NavigatorPlan(
+            members=members,
+            database_members=database_members,
+            textual_members=textual_members,
+        )
+
+    def collect_payloads(
+        self,
+        plan: NavigatorPlan | None = None,
+        progress_callback: Callable[[TextualProgressEvent], None] | None = None,
+    ) -> Iterator[EvidencePayload]:
+        """Yield structured payloads from an UFDR archive."""
+
+        plan = plan or self.plan_processing()
+        database_members = plan.database_members
+        textual_members = plan.textual_members
 
         if database_members:
             logger.info(
@@ -91,27 +132,61 @@ class UFDRContentNavigator:
             )
             for member in database_members:
                 yield from self._collect_database_rows(member)
-            return
 
-        textual_members = [
-            member
-            for member in members
-            if not member.is_dir and self._is_textual(member)
-        ]
+        if textual_members:
+            if database_members:
+                logger.info(
+                    "Processando também %d arquivo(s) textual(is)/imagem(ns) em %s",
+                    len(textual_members),
+                    self._extractor.ufdr_path,
+                )
+            else:
+                logger.info(
+                    "Nenhum banco de dados encontrado; processando %d arquivos textuais/imagens em %s",
+                    len(textual_members),
+                    self._extractor.ufdr_path,
+                )
 
-        if not textual_members:
+            total = len(textual_members)
+            for index, member in enumerate(textual_members, start=1):
+                if progress_callback:
+                    progress_callback(
+                        TextualProgressEvent(
+                            member=member,
+                            index=index,
+                            total=total,
+                            stage="start",
+                            engine=None,
+                        )
+                    )
+
+                payload_result = self._collect_text_payload(member)
+                if payload_result is not None:
+                    payload, engine = payload_result
+                    if progress_callback:
+                        progress_callback(
+                            TextualProgressEvent(
+                                member=member,
+                                index=index,
+                                total=total,
+                                stage="done",
+                                engine=engine,
+                            )
+                        )
+                    yield payload
+                else:
+                    if progress_callback:
+                        progress_callback(
+                            TextualProgressEvent(
+                                member=member,
+                                index=index,
+                                total=total,
+                                stage="skip",
+                                engine=None,
+                            )
+                        )
+        elif not database_members:
             logger.info("Nenhum banco de dados ou arquivo textual identificado em %s", self._extractor.ufdr_path)
-            return
-
-        logger.info(
-            "Nenhum banco de dados encontrado; processando %d arquivos textuais/imagens em %s",
-            len(textual_members),
-            self._extractor.ufdr_path,
-        )
-        for member in textual_members:
-            payload = self._collect_text_payload(member)
-            if payload is not None and payload.content:
-                yield payload
 
     def _collect_database_rows(self, member: UFDRMember) -> Iterator[EvidencePayload]:
         for row in self._database_reader.iter_rows(member):
@@ -128,7 +203,7 @@ class UFDRContentNavigator:
                 modified=member.modified,
             )
 
-    def _collect_text_payload(self, member: UFDRMember) -> EvidencePayload | None:
+    def _collect_text_payload(self, member: UFDRMember) -> tuple[EvidencePayload, str] | None:
         try:
             with self._extractor.open_member(member.name) as stream:
                 result = self._text_extractor.extract(stream, source_name=member.name)
@@ -143,7 +218,7 @@ class UFDRContentNavigator:
             logger.debug("Arquivo %s não produziu texto relevante", member.name)
             return None
 
-        return EvidencePayload(
+        payload = EvidencePayload(
             source_file=self._extractor.ufdr_path,
             internal_path=member.name,
             payload_type="text",
@@ -152,6 +227,7 @@ class UFDRContentNavigator:
             metadata={"engine": result.engine},
             modified=member.modified,
         )
+        return payload, result.engine
 
     @staticmethod
     def _is_database(member: UFDRMember) -> bool:

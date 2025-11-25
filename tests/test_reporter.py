@@ -1,7 +1,7 @@
 """Tests for the JSON reporter (F5)."""
 
-from pathlib import Path
 import json
+from pathlib import Path
 
 from src.models import EvidenceMatch
 from src.reporter import ResultReporter
@@ -16,14 +16,15 @@ def test_reporter_writes_matches(tmp_path: Path) -> None:
         match_value="analyst@example.com",
         file_type="database",
     )
-
     reporter.add_match(match)
-    reporter.write()
+    outputs = reporter.write()
 
-    output_path = tmp_path / "outputs" / "results.json"
-    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    json_payload = json.loads(outputs["json"].read_text(encoding="utf-8"))
+    assert json_payload == [match.to_dict()]
 
-    assert payload == [match.to_dict()]
+    csv_content = outputs["csv"].read_text(encoding="utf-8").splitlines()
+    assert csv_content[0].startswith("source_file,internal_path,pattern_type")
+    assert "case.ufdr,data/messages.db,Email,analyst@example.com" in csv_content[1]
 
 
 def test_reporter_supports_multiple_matches(tmp_path: Path) -> None:
@@ -45,8 +46,12 @@ def test_reporter_supports_multiple_matches(tmp_path: Path) -> None:
     ]
 
     reporter.extend_matches(matches)
-    reporter.write()
+    outputs = reporter.write()
 
-    payload = json.loads((tmp_path / "results.json").read_text(encoding="utf-8"))
+    payload = json.loads(outputs["json"].read_text(encoding="utf-8"))
 
     assert payload == [match.to_dict() for match in matches]
+
+    csv_lines = outputs["csv"].read_text(encoding="utf-8").splitlines()
+    assert csv_lines[0].startswith("source_file,internal_path,pattern_type")
+    assert len(csv_lines) == len(matches) + 1

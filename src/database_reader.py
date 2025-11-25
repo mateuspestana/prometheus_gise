@@ -133,3 +133,4 @@ class UFDRDatabaseReader:
         escaped = name.replace('"', '""')
         return f'"{escaped}"'
 
+

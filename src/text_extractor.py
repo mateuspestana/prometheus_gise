@@ -28,14 +28,32 @@ class TextExtractor:
 
     def __init__(self) -> None:
         self._partition_fn = None
+        self._pdfminer_available = None
 
     def extract(self, stream: BinaryIO, *, source_name: str) -> TextExtractionResult:
         """Return extracted text from the provided binary stream."""
 
         suffix = Path(source_name).suffix or ".bin"
         with self._materialize_stream(stream, suffix=suffix) as temp_path:
-            text = self._try_unstructured(temp_path)
-            return TextExtractionResult(text=text, engine="unstructured")
+            engine = None
+            text = ""
+            suffix_lower = suffix.lower()
+
+            if suffix_lower == ".pdf":
+                text = self._try_pdfminer(temp_path)
+                engine = "pdfminer"
+                if not text.strip():
+                    logger.debug("pdfminer vazia para %s; tentando unstructured", source_name)
+                    text = self._try_unstructured(temp_path)
+                    engine = "unstructured"
+            else:
+                text = self._try_unstructured(temp_path)
+                engine = "unstructured"
+                if not text.strip() and suffix_lower == ".pdf":
+                    text = self._try_pdfminer(temp_path)
+                    engine = "pdfminer"
+
+            return TextExtractionResult(text=text, engine=engine or "unstructured")
 
     @contextmanager
     def _materialize_stream(self, stream: BinaryIO, *, suffix: str) -> Iterator[Path]:
@@ -88,4 +106,25 @@ class TextExtractor:
 
         self._partition_fn = partition
         return partition
+
+    def _try_pdfminer(self, path: Path) -> str:
+        if self._pdfminer_available is False:
+            return ""
+
+        try:
+            from pdfminer.high_level import extract_text  # type: ignore[import]
+        except ImportError:
+            self._pdfminer_available = False
+            logger.debug("pdfminer.six não disponível; retornando texto vazio para %s", path.name)
+            return ""
+
+        try:
+            text = extract_text(str(path))
+        except Exception as exc:  # pragma: no cover - defensivo
+            logger.warning("pdfminer falhou para %s: %s", path, exc)
+            self._pdfminer_available = False
+            return ""
+
+        self._pdfminer_available = True
+        return text or ""
 

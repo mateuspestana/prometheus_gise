@@ -5,11 +5,12 @@ Handles UFDR packages as ZipFile archives to enumerate and extract their content
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 import logging
 from pathlib import Path
-from typing import Iterable, Iterator, List, Sequence
+from typing import IO, Iterable, Iterator, List, Sequence
 from zipfile import BadZipFile, ZipFile
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,20 @@ class UFDRExtractor:
             raise
 
         return extracted
+
+    @contextmanager
+    def open_member(self, member_name: str) -> Iterator[IO[bytes]]:
+        """Open a member inside the UFDR archive as a binary stream."""
+
+        self.validate_source()
+
+        try:
+            with ZipFile(self.ufdr_path) as archive:
+                with archive.open(member_name) as handle:
+                    yield handle
+        except BadZipFile:
+            logger.error("Failed to open member %s from invalid UFDR archive %s", member_name, self.ufdr_path)
+            raise
 
 
 def list_ufdr_members(ufdr_path: Path | str) -> List[UFDRMember]:

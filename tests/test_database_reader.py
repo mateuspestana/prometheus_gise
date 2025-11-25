@@ -34,6 +34,17 @@ def _create_ufdr_with_database(tmp_path: Path) -> Path:
     return archive_path
 
 
+def _create_ufdr_with_database_and_text(tmp_path: Path, file_name: str, content: str) -> Path:
+    db_file = tmp_path / "messages.db"
+    _build_sqlite_file(db_file)
+
+    archive_path = tmp_path / "archive.ufdr"
+    with ZipFile(archive_path, "w") as archive:
+        archive.write(db_file, arcname="data/messages.db")
+        archive.writestr(file_name, content)
+    return archive_path
+
+
 def _create_ufdr_with_text(tmp_path: Path, file_name: str, content: str) -> Path:
     archive_path = tmp_path / "archive.ufdr"
     with ZipFile(archive_path, "w") as archive:
@@ -68,6 +79,29 @@ def test_content_navigator_prioritizes_databases(tmp_path: Path) -> None:
     assert payloads[0].file_type == "database"
 
 
+def test_content_navigator_includes_text_even_with_databases(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    archive_path = _create_ufdr_with_database_and_text(tmp_path, "docs/report.pdf", "conteúdo pdf fictício")
+
+    class DummyTextExtractor:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def extract(self, stream, *, source_name: str):
+            return TextExtractionResult(text="texto do pdf", engine="dummy")
+
+    monkeypatch.setattr("src.content_navigator.TextExtractor", DummyTextExtractor)
+
+    navigator = UFDRContentNavigator(archive_path)
+    payloads = list(navigator.collect_payloads())
+
+    assert len(payloads) == 3
+    assert sum(1 for payload in payloads if payload.payload_type == "database_row") == 2
+    text_payloads = [payload for payload in payloads if payload.payload_type == "text"]
+    assert len(text_payloads) == 1
+    assert text_payloads[0].file_type == "document"
+    assert text_payloads[0].content == "texto do pdf"
+
+
 def test_content_navigator_fallback_to_text(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     archive_path = _create_ufdr_with_text(tmp_path, "report.txt", "conteúdo de teste")
 
@@ -94,6 +128,7 @@ def test_text_extractor_prefers_unstructured(monkeypatch: pytest.MonkeyPatch) ->
     extractor = TextExtractor()
 
     monkeypatch.setattr(TextExtractor, "_try_unstructured", lambda self, path: "texto primário")
+    monkeypatch.setattr(TextExtractor, "_try_pdfminer", lambda self, path: "")
 
     stream = io.BytesIO(b"dados qualquer")
     result = extractor.extract(stream, source_name="documento.txt")
@@ -102,8 +137,22 @@ def test_text_extractor_prefers_unstructured(monkeypatch: pytest.MonkeyPatch) ->
     assert result.text == "texto primário"
 
 
+def test_text_extractor_pdfminer_used_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    extractor = TextExtractor()
+
+    monkeypatch.setattr(TextExtractor, "_try_pdfminer", lambda self, path: "texto pdfminer")
+    monkeypatch.setattr(TextExtractor, "_try_unstructured", lambda self, path: (_ for _ in ()).throw(AssertionError("não deve chamar unstructured")))
+
+    stream = io.BytesIO(b"dados qualquer")
+    result = extractor.extract(stream, source_name="documento.pdf")
+
+    assert result.engine == "pdfminer"
+    assert result.text == "texto pdfminer"
+
+
 def test_text_extractor_returns_empty_when_unstructured_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     extractor = TextExtractor()
+    monkeypatch.setattr(TextExtractor, "_try_pdfminer", lambda self, path: "")
     monkeypatch.setattr(TextExtractor, "_try_unstructured", lambda self, path: "")
 
     stream = io.BytesIO(b"dados qualquer")

@@ -35,6 +35,7 @@ ID	Função	Descrição
 F1	Busca recursiva	Percorre pastas e subpastas, identificando arquivos .ufdr.
 F2	Leitura de .ufdr	Trata .ufdr como .zip, abrindo e mapeando seus conteúdos.
 F3	Leitura interna de bancos de dados	Identifica e acessa .db / .sqlite / .sqlite3 dentro dos pacotes.
+	F3.1 Se não houver um arquivo .db ou .sqlite ou .sqlite3 dentro do .ufdr, ele deve rastrear todos os arquivos que possuem texto (.eml, .pdf, .xlsx, .csv, .ics, .vcf, para extrair os textos e aplicar F4). 
 F4	Motor de Regex	Executa padrões do arquivo config/patterns.json em texto e tabelas.
 F5	Consolidação de Resultados	Cria um único arquivo JSON com todos os resultados encontrados.
 F6	Metadados Forenses	Adiciona a cada resultado: nome do arquivo .ufdr, caminho interno, nome do arquivo analisado, tipo de dado identificado, timestamp e contexto textual.

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDesktopServices, QFont, QPalette, QColor, QIcon
@@ -32,8 +33,13 @@ from PyQt5.QtWidgets import (
     QHeaderView,
 )
 
-DEFAULT_PATTERNS_PATH = Path("config/patterns.json")
+from .logger import configure_logging
+from .main import run_pipeline
+
+DEFAULT_PATTERNS_PATH = Path("config/regex_patterns.json")
 APP_ICON_PATH = Path("icon.png")
+DEFAULT_OUTPUT_PATH = Path("outputs/prometheus_results.json")
+DEFAULT_LOG_PATH = Path("outputs/logs/gui.log")
 
 
 @dataclass
@@ -63,6 +69,9 @@ class PrometheusWindow(QMainWindow):
         self.status_label = QLabel("Pronto para iniciar.", self)
         self.results_table = QTableWidget(self)
         self.help_view = QTextBrowser(self)
+        self.output_path = DEFAULT_OUTPUT_PATH
+        self.csv_output_path: Optional[Path] = None
+        self.logger = configure_logging(verbose=False, log_path=DEFAULT_LOG_PATH)
 
         self._build_ui()
         self._configure_table()
@@ -343,7 +352,8 @@ class PrometheusWindow(QMainWindow):
 
     def _start_scan(self) -> None:
         evidence_dir = Path(self.input_edit.text()).expanduser()
-        config_file = Path(self.config_edit.text()).expanduser() if self.config_edit.text() else None
+        config_text = self.config_edit.text().strip()
+        config_file: Optional[Path] = Path(config_text).expanduser() if config_text else None
 
         if not evidence_dir.exists() or not evidence_dir.is_dir():
             QMessageBox.warning(self, "Entrada inválida", "Selecione um diretório de evidências válido.")
@@ -353,21 +363,131 @@ class PrometheusWindow(QMainWindow):
             QMessageBox.warning(self, "Configuração inválida", "Selecione um arquivo de padrões válido.")
             return
 
+        effective_config = config_file or DEFAULT_PATTERNS_PATH
+        if not effective_config.exists():
+            QMessageBox.warning(
+                self,
+                "Configuração ausente",
+                "O arquivo de padrões não foi localizado. Ajuste o caminho em \"Fontes de dados\".",
+            )
+            return
+
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
         self.results_table.setRowCount(0)
-        self.progress_bar.setValue(15)
-        self.progress_bar.setFormat("Executando pipeline…")
-        self.status_label.setText("Executando varredura (pipeline ainda em implementação)…")
+        self.progress_bar.setRange(0, 0)
+        self.progress_bar.setFormat("Preparando execução…")
+        self.status_label.setText("Executando varredura…")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.logger.info("Varredura iniciada via GUI: input=%s config=%s output=%s", evidence_dir, effective_config, self.output_path)
 
-        QMessageBox.information(
-            self,
-            "Varredura pendente",
-            "A lógica de processamento completa será integrada quando as funcionalidades restantes estiverem prontas.\n"
-            "Utilize os módulos individuais (scanner, extractor, regex) para testes aprofundados.",
-        )
+        success = False
+        current_file: dict[str, object] = {"path": None, "total": 0}
+        csv_path: Optional[str] = None
 
-        self.progress_bar.setValue(0)
-        self.progress_bar.setFormat("Aguardando execução…")
-        self.status_label.setText("Pronto para iniciar.")
+        def handle_progress(event: dict) -> None:
+            event_type = event.get("type")
+            path_str = event.get("path")
+            if not event_type or not path_str:
+                return
+
+            ufdr_name = Path(path_str).name
+
+            if event_type == "ufdr-start":
+                total = int(event.get("textual_total") or 0)
+                current_file["path"] = path_str
+                current_file["total"] = total
+                if total > 0:
+                    self.progress_bar.setRange(0, total)
+                    self.progress_bar.setValue(0)
+                    self.progress_bar.setFormat(f"{ufdr_name}: 0/{total}")
+                else:
+                    self.progress_bar.setRange(0, 1)
+                    self.progress_bar.setValue(1)
+                    self.progress_bar.setFormat(f"{ufdr_name}: sem arquivos textuais")
+                self.status_label.setText(f"Processando {ufdr_name}…")
+            elif event_type == "text-progress":
+                total = int(event.get("total") or current_file.get("total") or 1)
+                index = int(event.get("index") or 0)
+                engine = event.get("engine") or event.get("stage") or ""
+                self.progress_bar.setRange(0, total)
+                self.progress_bar.setValue(min(index, total))
+                self.progress_bar.setFormat(f"{ufdr_name}: {index}/{total} via {engine}")
+                self.status_label.setText(f"{ufdr_name}: {index}/{total} via {engine}")
+            elif event_type == "ufdr-complete":
+                self.status_label.setText(f"Concluído {ufdr_name}")
+
+        try:
+            summary = run_pipeline(
+                input_dir=evidence_dir,
+                config_path=effective_config,
+                output_path=self.output_path,
+                progress_callback=handle_progress,
+            )
+            success = True
+            csv_path = summary.get("csv_output")
+            if csv_path:
+                self.csv_output_path = Path(csv_path)
+
+            if self.output_path.exists():
+                with self.output_path.open("r", encoding="utf-8") as handle:
+                    data = json.load(handle)
+            else:
+                data = []
+
+            rows = [
+                ResultRow(
+                    source_file=str(entry.get("source_file", "")),
+                    pattern_type=str(entry.get("pattern_type", "")),
+                    match_value=str(entry.get("match_value", "")),
+                    internal_path=str(entry.get("internal_path", "")),
+                    timestamp=str(entry.get("timestamp", "")),
+                )
+                for entry in data
+            ]
+            self.populate_results(rows)
+
+            processed = int(summary.get("processed", 0))
+            matches = int(summary.get("matches", 0))
+            failures_raw = summary.get("failures", []) or []
+            failures = [Path(item).name if item else "" for item in failures_raw]
+
+            self.progress_bar.setRange(0, 1)
+            self.progress_bar.setValue(1)
+            self.progress_bar.setFormat("Varredura concluída")
+            self.status_label.setText(
+                f"Processados: {processed} | Ocorrências: {matches} | Falhas: {len(failures)}"
+            )
+
+            self.logger.info(
+                "Varredura concluída. Processados=%s ocorrencias=%s falhas=%s",
+                processed,
+                matches,
+                failures_raw,
+            )
+
+            details_lines = [
+                f"{processed} arquivo(s) processado(s).",
+                f"{matches} ocorrência(s) identificada(s).",
+            ]
+            if failures:
+                details_lines.append("Falhas:")
+                details_lines.extend(f"- {name or '(desconhecido)'}" for name in failures)
+            QMessageBox.information(self, "Varredura concluída", "\n".join(details_lines))
+        except Exception as exc:  # pragma: no cover - GUI flow
+            self.logger.exception("Erro ao executar a varredura")
+            QMessageBox.critical(
+                self,
+                "Erro na varredura",
+                f"Falha ao executar o pipeline:\n{exc}",
+            )
+            self.status_label.setText("Falha na execução. Verifique os logs.")
+        finally:
+            QApplication.restoreOverrideCursor()
+            if not success:
+                self.progress_bar.setValue(0)
+                self.progress_bar.setFormat("Aguardando execução…")
+            elif csv_path:
+                self.logger.info("Resultado CSV disponível em %s", csv_path)
 
     def _open_patterns_file(self) -> None:
         if not DEFAULT_PATTERNS_PATH.exists():
@@ -380,15 +500,26 @@ class PrometheusWindow(QMainWindow):
             QMessageBox.information(self, "Sem dados", "Não há resultados para exportar no momento.")
             return
 
+        if not self.output_path.exists():
+            QMessageBox.information(
+                self,
+                "Sem arquivo",
+                "Execute uma varredura antes de exportar. O arquivo de resultados não foi encontrado.",
+            )
+            return
+
         target, _ = QFileDialog.getSaveFileName(self, "Salvar resultados", filter="JSON (*.json)")
         if not target:
             return
 
+        destination = Path(target).expanduser()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(self.output_path.read_text(encoding="utf-8"), encoding="utf-8")
+
         QMessageBox.information(
             self,
-            "Exportação",
-            f"Resultados seriam exportados para: {target}\n"
-            "Integração final ocorrerá após conclusão do pipeline.",
+            "Exportação concluída",
+            f"Resultados exportados para {destination}.",
         )
 
     # ------------------------------------------------------------- Helpers ---
