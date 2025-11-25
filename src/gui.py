@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 
 # Configure Qt plugins BEFORE importing any PyQt6 modules
-from .qt_utils import configure_qt_plugins
+from src.qt_utils import configure_qt_plugins
 configure_qt_plugins()
 
 from PyQt6.QtCore import Qt, QUrl
@@ -38,8 +38,8 @@ from PyQt6.QtWidgets import (
     QHeaderView,
 )
 
-from .logger import configure_logging
-from .main import run_pipeline
+from src.logger import configure_logging
+from src.main import run_pipeline
 
 DEFAULT_PATTERNS_PATH = Path("config/regex_patterns.json")
 APP_ICON_PATH = Path("icon.png")

@@ -1,9 +1,13 @@
 name: Build Executables
 
+permissions:
+    contents: write
+
 on:
-  push:
-    tags:
-      - 'v*'
+  # Workflow desabilitado - descomente para reativar
+  # push:
+  #   tags:
+  #     - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -131,8 +135,6 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: "Prometheus Forensic Tool ${{ github.ref_name }}"
-          owner: ${{ github.repository_owner }}
-          repo: ${{ github.event.repository.name }}
           body: |
             ## Prometheus Forensic Tool – versão ${{ github.ref_name }}
 

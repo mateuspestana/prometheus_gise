@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, Iterator, Mapping
 from tempfile import NamedTemporaryFile
 
-from .extractor import UFDRExtractor, UFDRMember
+from src.extractor import UFDRExtractor, UFDRMember
 
 logger = logging.getLogger(__name__)
 

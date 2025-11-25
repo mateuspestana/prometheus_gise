@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 from typing import Iterable, List, Sequence
 
-from .models import EvidenceMatch
+from src.models import EvidenceMatch
 
 logger = logging.getLogger(__name__)
 

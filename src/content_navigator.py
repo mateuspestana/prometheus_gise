@@ -8,9 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterator, Literal, Mapping, Sequence
 
-from .database_reader import UFDRDatabaseReader
-from .extractor import UFDRExtractor, UFDRMember
-from .text_extractor import MissingDependencyError, TextExtractor
+from src.database_reader import UFDRDatabaseReader
+from src.extractor import UFDRExtractor, UFDRMember
+from src.text_extractor import MissingDependencyError, TextExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,6 @@ TEXTUAL_EXTENSIONS = {
     ".csv",
     ".tsv",
     ".json",
-    ".xml",
     ".html",
     ".htm",
     ".md",
@@ -92,10 +91,13 @@ class NavigatorPlan:
 class UFDRContentNavigator:
     """Coordinate ingestion of UFDR content, prioritizing databases."""
 
-    def __init__(self, ufdr_path: Path | str) -> None:
+    def __init__(self, ufdr_path: Path | str, allowed_extensions: set[str] | None = None) -> None:
         self._extractor = UFDRExtractor(ufdr_path)
         self._database_reader = UFDRDatabaseReader(self._extractor)
         self._text_extractor = TextExtractor()
+        # If allowed_extensions is None, use all extensions (backward compatibility)
+        # Otherwise, only process files with extensions in the allowed set
+        self._allowed_extensions = allowed_extensions
 
     def plan_processing(self) -> NavigatorPlan:
         """Return the members partitioned by type for progress planning."""
@@ -236,9 +238,12 @@ class UFDRContentNavigator:
         suffix = Path(member.name).suffix.lower()
         return not member.is_dir and suffix in {".db", ".sqlite", ".sqlite3", ".s3db"}
 
-    @staticmethod
-    def _is_textual(member: UFDRMember) -> bool:
+    def _is_textual(self, member: UFDRMember) -> bool:
         suffix = Path(member.name).suffix.lower()
+        # If allowed_extensions is set, only check those
+        if self._allowed_extensions is not None:
+            return suffix in self._allowed_extensions
+        # Otherwise, use default behavior (all textual + image extensions)
         return suffix in TEXTUAL_EXTENSIONS or suffix in IMAGE_EXTENSIONS
 
     @staticmethod

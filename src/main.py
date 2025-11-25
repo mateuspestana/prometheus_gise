@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional
 
-from .content_navigator import EvidencePayload, UFDRContentNavigator
-from .forensics import build_evidence_match
-from .logger import execute_with_resilience, get_logger
-from .models import EvidenceMatch
-from .regex_engine import RegexEngine
-from .reporter import ResultReporter
-from .scanner import UFDRScanner
+from src.content_navigator import EvidencePayload, UFDRContentNavigator
+from src.forensics import build_evidence_match
+from src.logger import execute_with_resilience, get_logger
+from src.models import EvidenceMatch
+from src.regex_engine import RegexEngine
+from src.reporter import ResultReporter
+from src.scanner import UFDRScanner
 
 
 ProgressCallback = Callable[[Dict[str, object]], None]
@@ -23,6 +24,7 @@ def run_pipeline(
     output_path: Path,
     *,
     progress_callback: Optional[ProgressCallback] = None,
+    allowed_extensions: Optional[set[str]] = None,
 ) -> Dict[str, object]:
     """Execute the complete Prometheus processing pipeline (F10)."""
 
@@ -32,16 +34,27 @@ def run_pipeline(
     regex_engine = RegexEngine.from_config(config_path)
 
     logger.info("Iniciando varredura em %s", input_dir)
+    logger.debug("Configuração de padrões: %s", config_path)
+    logger.debug("Arquivo de saída: %s", output_path)
+    
     scan_results = scanner.scan()
     ufdr_paths = [result.path for result in scan_results]
     logger.info("%d arquivo(s) .ufdr encontrado(s)", len(ufdr_paths))
+    
+    # Log detalhado dos arquivos encontrados (sempre mostrar, não só em debug)
+    if ufdr_paths:
+        logger.info("Arquivos encontrados:")
+        for idx, result in enumerate(scan_results, 1):
+            logger.info("  [%d/%d] %s", idx, len(ufdr_paths), result.path)
+    else:
+        logger.warning("Nenhum arquivo .ufdr encontrado em %s", input_dir)
 
     def emit(event: Dict[str, object]) -> None:
         if progress_callback:
             progress_callback(event)
 
     def process_file(path: Path) -> None:
-        navigator = UFDRContentNavigator(path)
+        navigator = UFDRContentNavigator(path, allowed_extensions=allowed_extensions)
         plan = navigator.plan_processing()
         emit(
             {

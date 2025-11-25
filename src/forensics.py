@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from .content_navigator import EvidencePayload
-from .models import EvidenceMatch
-from .regex_engine import RegexMatch
+from src.content_navigator import EvidencePayload
+from src.models import EvidenceMatch
+from src.regex_engine import RegexMatch
 
 
 def build_evidence_match(payload: EvidencePayload, regex_match: RegexMatch) -> EvidenceMatch:

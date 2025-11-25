@@ -1,5 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 from pathlib import Path
+
+# Get the directory containing this spec file (project root)
+spec_root = Path(__file__).parent.absolute()
 
 datas = [('config', 'config')]
 binaries = []
@@ -28,7 +32,7 @@ hiddenimports = [
 
 a = Analysis(
     ['src/gui.py'],
-    pathex=[],
+    pathex=[str(spec_root)],  # Add project root to path so 'src' imports work
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
