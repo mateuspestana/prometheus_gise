@@ -104,6 +104,7 @@ def main() -> None:
 
     # Sidebar - Configuration
     with st.sidebar:
+        st.image("icon.png")
         st.header("⚙️ Configuração")
 
         # Input directory
