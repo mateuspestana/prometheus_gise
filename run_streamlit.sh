@@ -141,7 +141,12 @@ echo "📍 Acesse: http://localhost:8501"
 echo "⏹️  Pressione Ctrl+C para parar o servidor."
 echo ""
 
-# Run Streamlit
+# Set PYTHONPATH to include the project root directory
+# This ensures that 'src' module can be imported correctly
+export PYTHONPATH="$SCRIPT_DIR:$PYTHONPATH"
+
+# Run Streamlit using Python module execution
+# This ensures proper module resolution
 $PYTHON_EXE -m streamlit run src/streamlit_app.py \
     --server.port 8501 \
     --server.address localhost \
