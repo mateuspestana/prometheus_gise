@@ -115,37 +115,40 @@ def scan(
 
         if event_type == "ufdr-start":
             total = int(event.get("textual_total") or 0)
-            typer.secho(
-                f"\n{'='*80}",
-                fg=typer.colors.CYAN,
-                err=True,
-            )
-            typer.secho(
-                f"📦 Processando UFDR: {ufdr_name}",
-                fg=typer.colors.CYAN,
-                bold=True,
-                err=True,
-            )
-            typer.secho(
-                f"   Caminho completo: {full_path}",
-                fg=typer.colors.WHITE,
-                err=True,
-            )
+            if verbose:
+                typer.secho(
+                    f"\n{'='*80}",
+                    fg=typer.colors.CYAN,
+                    err=True,
+                )
+                typer.secho(
+                    f"📦 Processando UFDR: {ufdr_name}",
+                    fg=typer.colors.CYAN,
+                    bold=True,
+                    err=True,
+                )
+                typer.secho(
+                    f"   Caminho completo: {full_path}",
+                    fg=typer.colors.WHITE,
+                    err=True,
+                )
             if total > 0:
-                bar_cm = typer.progressbar(length=total, label=f"{ufdr_name} (textual)")
+                bar_cm = typer.progressbar(length=total, label=f"{ufdr_name} (textual)" if verbose else "Processando...")
                 progress = bar_cm.__enter__()
                 progress_state[path_str] = (bar_cm, progress)
-                typer.secho(
-                    f"   📄 Encontrados {total} arquivo(s) textual(is) para processar",
-                    fg=typer.colors.BLUE,
-                    err=True,
-                )
+                if verbose:
+                    typer.secho(
+                        f"   📄 Encontrados {total} arquivo(s) textual(is) para processar",
+                        fg=typer.colors.BLUE,
+                        err=True,
+                    )
             else:
-                typer.secho(
-                    f"   ⚠️  Nenhum arquivo textual elegível para processamento.",
-                    fg=typer.colors.YELLOW,
-                    err=True,
-                )
+                if verbose:
+                    typer.secho(
+                        f"   ⚠️  Nenhum arquivo textual elegível para processamento.",
+                        fg=typer.colors.YELLOW,
+                        err=True,
+                    )
         elif event_type == "text-progress":
             state = progress_state.get(path_str)
             index = int(event.get("index") or 0)
@@ -159,35 +162,37 @@ def scan(
                 if stage in {"done", "skip"}:
                     progress.update(1)
 
-            # Mostrar detalhes do arquivo sendo processado
-            member_name = Path(member).name if member else f"arquivo {index}"
-            typer.secho(
-                f"   [{index}/{total}] Processando: {member_name}",
-                fg=typer.colors.BRIGHT_BLUE,
-                err=True,
-            )
-            if engine:
+            # Mostrar detalhes do arquivo sendo processado apenas se verbose
+            if verbose:
+                member_name = Path(member).name if member else f"arquivo {index}"
                 typer.secho(
-                    f"       → Engine: {engine}",
-                    fg=typer.colors.WHITE,
+                    f"   [{index}/{total}] Processando: {member_name}",
+                    fg=typer.colors.BRIGHT_BLUE,
                     err=True,
                 )
+                if engine:
+                    typer.secho(
+                        f"       → Engine: {engine}",
+                        fg=typer.colors.WHITE,
+                        err=True,
+                    )
         elif event_type == "ufdr-complete":
             state = progress_state.pop(path_str, None)
             if state:
                 bar_cm, _ = state
                 bar_cm.__exit__(None, None, None)
-            typer.secho(
-                f"✅ Concluído: {ufdr_name}",
-                fg=typer.colors.GREEN,
-                bold=True,
-                err=True,
-            )
-            typer.secho(
-                f"{'='*80}\n",
-                fg=typer.colors.CYAN,
-                err=True,
-            )
+            if verbose:
+                typer.secho(
+                    f"✅ Concluído: {ufdr_name}",
+                    fg=typer.colors.GREEN,
+                    bold=True,
+                    err=True,
+                )
+                typer.secho(
+                    f"{'='*80}\n",
+                    fg=typer.colors.CYAN,
+                    err=True,
+                )
 
     try:
         # Verificar se há arquivos antes de processar

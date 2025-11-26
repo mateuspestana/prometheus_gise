@@ -180,6 +180,22 @@ Verifique se o Streamlit está instalado:
 .venv\Scripts\pip.exe install streamlit
 ```
 
+### Erro: "C extension: pandas.compat._constants not built"
+
+Este erro ocorre quando o pandas não foi compilado corretamente. Para resolver:
+
+```cmd
+.venv\Scripts\activate
+pip uninstall pandas
+pip install --no-cache-dir pandas
+```
+
+Ou usando `uv`:
+```cmd
+uv pip uninstall --python .venv\Scripts\python.exe pandas
+uv pip install --python .venv\Scripts\python.exe pandas
+```
+
 ### Ambiente virtual não encontrado
 
 Recrie o ambiente virtual:

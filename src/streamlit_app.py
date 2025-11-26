@@ -18,7 +18,7 @@ st.set_page_config(
 
 # Constants
 DEFAULT_PATTERNS_PATH = Path("config/regex_patterns.json")
-DEFAULT_OUTPUT_PATH = Path("outputs/prometheus_results.json")
+DEFAULT_OUTPUT_BASE = Path("outputs/prometheus_results.json")  # Base path, timestamp will be added
 DEFAULT_LOG_PATH = Path("outputs/logs/streamlit.log")
 
 # Initialize session state
@@ -171,7 +171,7 @@ def main() -> None:
         logger.info("🔍 Prometheus Forensic Tool - Iniciando varredura via Streamlit")
         logger.info("   Diretório de entrada: %s", evidence_dir)
         logger.info("   Arquivo de padrões: %s", config_path)
-        logger.info("   Arquivo de saída: %s", DEFAULT_OUTPUT_PATH)
+        logger.info("   Arquivo de saída base: %s", DEFAULT_OUTPUT_BASE)
         logger.info("=" * 80)
 
         if not evidence_dir or not evidence_dir.exists() or not evidence_dir.is_dir():
@@ -266,8 +266,8 @@ def main() -> None:
         st.session_state.progress_status_placeholder = progress_status_placeholder
 
         # Create output directory
-        DEFAULT_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        logger.info("📂 Diretório de saída criado/preparado: %s", DEFAULT_OUTPUT_PATH.parent)
+        DEFAULT_OUTPUT_BASE.parent.mkdir(parents=True, exist_ok=True)
+        logger.info("📂 Diretório de saída criado/preparado: %s", DEFAULT_OUTPUT_BASE.parent)
 
         # Progress callback for Streamlit
         # Note: Streamlit updates UI only at the end of script execution
@@ -419,7 +419,7 @@ def main() -> None:
             summary = run_pipeline(
                 input_dir=evidence_dir,
                 config_path=config_path,
-                output_path=DEFAULT_OUTPUT_PATH,
+                output_path=DEFAULT_OUTPUT_BASE,
                 progress_callback=handle_progress,
                 allowed_extensions=allowed_extensions_set,
             )
@@ -441,14 +441,15 @@ def main() -> None:
 
             st.session_state.scan_summary = summary
 
-            # Load results
-            if DEFAULT_OUTPUT_PATH.exists():
-                with DEFAULT_OUTPUT_PATH.open("r", encoding="utf-8") as f:
+            # Load results from the generated file (with timestamp)
+            json_output_path = summary.get("output")
+            if json_output_path and Path(json_output_path).exists():
+                with open(json_output_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 logger.info("📄 Resultados carregados: %d entradas", len(data))
             else:
                 data = []
-                logger.warning("⚠️  Arquivo de resultados não encontrado: %s", DEFAULT_OUTPUT_PATH)
+                logger.warning("⚠️  Arquivo de resultados não encontrado: %s", json_output_path)
 
             st.session_state.scan_results = data
             st.session_state.scan_running = False
@@ -503,51 +504,47 @@ def main() -> None:
 
         # Results table - lazy import pandas only when displaying results
         if len(st.session_state.scan_results) > 0:
-            import pandas as pd
-            
-            df = pd.DataFrame(st.session_state.scan_results)
-            # Reorder columns for better display
-            column_order = ["source_file", "pattern_type", "match_value", "internal_path", "timestamp"]
-            available_columns = [col for col in column_order if col in df.columns]
-            if available_columns:
-                df = df[available_columns]
-            else:
-                df = df[[col for col in df.columns]]
+            try:
+                import pandas as pd
+                
+                df = pd.DataFrame(st.session_state.scan_results)
+                # Reorder columns for better display
+                column_order = ["source_file", "pattern_type", "match_value", "internal_path", "timestamp"]
+                available_columns = [col for col in column_order if col in df.columns]
+                if available_columns:
+                    df = df[available_columns]
+                else:
+                    df = df[[col for col in df.columns]]
 
-            st.dataframe(df, use_container_width=True, height=400)
-            
-            # Show CSV content in expandable section
-            csv_path = summary.get("csv_output") if summary else None
-            if csv_path and Path(csv_path).exists():
-                st.markdown("---")
-                st.markdown("#### 📄 Visualização do CSV")
-                with st.expander("📄 Ver conteúdo completo do CSV", expanded=True):
-                    # Show CSV as dataframe
-                    try:
-                        df_csv = pd.read_csv(csv_path)
-                        st.dataframe(df_csv, use_container_width=True, height=400)
-                    except Exception as e:
-                        logger.warning("Erro ao ler CSV como DataFrame: %s", e)
-                        # Fallback: show raw CSV content
-                        with open(csv_path, "r", encoding="utf-8") as f:
-                            csv_content = f.read()
-                        st.code(csv_content, language="csv")
+                st.dataframe(df, use_container_width=True, height=400)
+            except ImportError as e:
+                # Fallback if pandas fails to import (e.g., C extensions not built)
+                logger.error("Erro ao importar pandas: %s", e)
+                st.error(f"Erro ao carregar pandas: {e}")
+                st.warning("Tente reinstalar pandas: pip install --force-reinstall pandas")
+                # Show results as JSON instead
+                st.json(st.session_state.scan_results[:100])  # Show first 100 results
+                if len(st.session_state.scan_results) > 100:
+                    st.info(f"Mostrando apenas os primeiros 100 resultados de {len(st.session_state.scan_results)} total.")
 
             # Download buttons
+            csv_path = summary.get("csv_output") if summary else None
             st.markdown("---")
             st.markdown("#### 💾 Download de Resultados")
             col1, col2 = st.columns(2)
 
-            json_path = summary.get("output") if summary else str(DEFAULT_OUTPUT_PATH)
+            json_path = summary.get("output") if summary else None
 
             with col1:
-                if Path(json_path).exists():
+                if json_path and Path(json_path).exists():
                     with open(json_path, "r", encoding="utf-8") as f:
                         json_data = f.read()
+                    # Extract filename from path for download
+                    json_filename = Path(json_path).name
                     st.download_button(
                         label="📥 Download JSON",
                         data=json_data,
-                        file_name="prometheus_results.json",
+                        file_name=json_filename,
                         mime="application/json",
                         use_container_width=True,
                     )
@@ -558,10 +555,12 @@ def main() -> None:
                 if csv_path and Path(csv_path).exists():
                     with open(csv_path, "r", encoding="utf-8") as f:
                         csv_data = f.read()
+                    # Extract filename from path for download
+                    csv_filename = Path(csv_path).name
                     st.download_button(
                         label="📥 Download CSV",
                         data=csv_data,
-                        file_name="prometheus_results.csv",
+                        file_name=csv_filename,
                         mime="text/csv",
                         use_container_width=True,
                     )

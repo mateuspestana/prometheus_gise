@@ -1,8 +1,9 @@
-"""Application entry points orchestrating Prometheus workflows."""
+"""Application entry points orchestring Prometheus workflows."""
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional
 
@@ -30,7 +31,18 @@ def run_pipeline(
 
     logger = get_logger()
     scanner = UFDRScanner(input_dir)
-    reporter = ResultReporter(output_path)
+    
+    # Generate timestamp for output files
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = output_path.parent
+    output_stem = output_path.stem  # e.g., "prometheus_results"
+    output_suffix = output_path.suffix  # e.g., ".json"
+    
+    # Create paths with timestamp
+    json_path = output_dir / f"{output_stem}_{timestamp}{output_suffix}"
+    csv_path = output_dir / f"{output_stem}_{timestamp}.csv"
+    
+    reporter = ResultReporter(json_path, csv_output_path=csv_path)
     regex_engine = RegexEngine.from_config(config_path)
 
     logger.info("Iniciando varredura em %s", input_dir)
