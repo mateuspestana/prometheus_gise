@@ -61,31 +61,97 @@ Se o script `run_streamlit.bat` não funcionar, siga estes passos:
 6. **Acesse a aplicação:**
    - Abra seu navegador em: http://localhost:8501
 
-### Script Simplificado (`run.bat`)
+### Scripts de Execução
 
-Para facilitar, você pode usar o script `run.bat` que apenas ativa o ambiente virtual e executa o Streamlit:
+O projeto inclui scripts prontos para facilitar a execução. **Importante:** Todos os scripts assumem que o ambiente virtual `.venv` já foi criado e as dependências já foram instaladas (veja seção "Instalação Manual" acima).
+
+#### `run_streamlit.bat` - Interface Web
+
+Script simplificado que executa o Streamlit:
 
 ```cmd
-run.bat
+run_streamlit.bat
 ```
 
-Este script assume que:
-- O ambiente virtual `.venv` já foi criado
-- As dependências já foram instaladas
+**Requisitos obrigatórios:**
+- O ambiente virtual `.venv` já deve estar criado
+- Todas as dependências de `requirements.txt` já devem estar instaladas
+- O Streamlit deve estar instalado no ambiente virtual
+
+Este script:
+- Ativa o ambiente virtual `.venv`
+- Configura o `PYTHONPATH` corretamente
+- Executa o Streamlit na porta 8501
+
+**Se você ainda não configurou o ambiente:**
+Siga os passos da seção "Instalação Manual" acima antes de usar este script.
+
+#### `run_cli.bat` - Interface de Linha de Comando Interativa
+
+Script interativo para executar o CLI:
+
+```cmd
+run_cli.bat
+```
+
+**Requisitos obrigatórios:**
+- O ambiente virtual `.venv` já deve estar criado
+- Todas as dependências de `requirements.txt` já devem estar instaladas
+
+Este script:
+- Ativa o ambiente virtual `.venv`
+- Configura o `PYTHONPATH` corretamente
+- Solicita o caminho do diretório com arquivos `.ufdr`
+- Executa a varredura automaticamente
+
+**Se você ainda não configurou o ambiente:**
+Siga os passos da seção "Instalação Manual" acima antes de usar este script.
 
 ## Uso
 
 ### Interface Web (Streamlit)
 
-1. Execute `run_streamlit.bat` ou `run.bat`
-2. Acesse http://localhost:8501 no navegador
-3. Selecione o diretório com arquivos `.ufdr`
-4. Escolha as extensões de arquivo a processar
-5. Clique em "Iniciar varredura"
-6. Aguarde o processamento e visualize os resultados
+**Opção 1 - Usando o Script:**
+```cmd
+run_streamlit.bat
+```
+
+**Requisitos:** O ambiente virtual `.venv` e as dependências devem estar instalados (veja seção "Instalação Manual" acima).
+
+**Opção 2 - Comando Manual:**
+Se preferir executar manualmente:
+```cmd
+.venv\Scripts\activate
+python -m streamlit run src\streamlit_app.py --server.port 8501
+```
+
+**Após iniciar:**
+1. Acesse http://localhost:8501 no navegador
+2. Selecione o diretório com arquivos `.ufdr`
+3. Escolha as extensões de arquivo a processar
+4. Clique em "Iniciar varredura"
+5. Aguarde o processamento e visualize os resultados
 
 ### Interface de Linha de Comando (CLI)
 
+**Opção 1 - Script Interativo:**
+```cmd
+run_cli.bat
+```
+O script solicitará o caminho do diretório com arquivos `.ufdr` e executará a varredura.
+
+**Opção 2 - Comando Manual:**
+```cmd
+.venv\Scripts\activate
+python -m src.cli scan -i "caminho\para\evidencias"
+```
+
+**Com modo verboso (mostra detalhes de cada arquivo):**
+```cmd
+python -m src.cli --verbose scan -i "caminho\para\evidencias"
+```
+
+**Com opções personalizadas:**
 ```cmd
 python -m src.cli --verbose scan -i "caminho\para\evidencias" -c "config\regex_patterns.json" -o "outputs\resultados.json"
 ```
@@ -119,11 +185,11 @@ Prometheus/
 │   └── streamlit_app.py   # Interface web Streamlit
 ├── config/                # Arquivos de configuração
 │   └── regex_patterns.json
-├── outputs/               # Resultados gerados
+├── outputs/               # Resultados gerados (com timestamp)
 ├── requirements.txt       # Dependências Python
-├── run_streamlit.bat      # Script completo (Windows)
-├── run_streamlit.sh       # Script completo (Linux/macOS)
-├── run.bat                # Script simplificado (Windows)
+├── run_streamlit.bat      # Script completo Streamlit (Windows)
+├── run_streamlit.sh       # Script completo Streamlit (Linux/macOS)
+├── run_cli.bat            # Script interativo CLI (Windows)
 └── README.md              # Este arquivo
 ```
 
@@ -150,12 +216,12 @@ Exemplo:
 
 ## Formatos de Saída
 
-A ferramenta gera dois arquivos de saída:
+A ferramenta gera dois arquivos de saída com timestamp:
 
-1. **JSON** (`prometheus_results.json`): Estruturado, completo
-2. **CSV** (`prometheus_results.csv`): Planilha, fácil de analisar
+1. **JSON** (`prometheus_results_YYYYMMDD_HHMMSS.json`): Estruturado, completo
+2. **CSV** (`prometheus_results_YYYYMMDD_HHMMSS.csv`): Planilha, fácil de analisar
 
-Ambos contêm as mesmas informações sobre ocorrências encontradas.
+Ambos contêm as mesmas informações sobre ocorrências encontradas. O timestamp garante que cada execução gere arquivos únicos, evitando sobrescrever resultados anteriores.
 
 ## Solução de Problemas
 
